@@ -1,0 +1,205 @@
+model:
+  model_type: "higgs_audio"
+  
+  # Encoder settings (Higgs Audio)
+  encoder_dim: 64 
+  n_filters: 64  
+  encoder_rates: [8, 5, 4, 2, 3]  
+  encoder_residual_layers: 1
+  
+  # Decoder settings (Higgs Audio)
+  decoder_dim: 1536
+  decoder_rates: [3, 2, 4, 5, 8]  
+  decoder_residual_layers: 1
+  
+  # Quantizer settings (Higgs Audio)
+  n_codebooks: 8 
+  codebook_size: 1024
+  codebook_dim: 64
+  quantizer_dropout: 0.5
+  
+  # HiggsAudio specific
+  n_q: 8  
+  D: 256 
+  semantic_model_path: "./HiggsAudiov2TokenizerUnofficial/pretrained/hubert-base-ls960"
+  semantic_teacher: "hubert_base_general"  
+  
+  # Audio settings
+  sample_rate: 24000
+  channels: 1
+  
+  # Discriminator settings
+  use_discriminator: true
+  discriminator_type: "mpd_msd_mrd"
+  discriminator_period_scales: [2, 3, 5, 7, 11]
+  discriminator_scale_downsample_rates: [4, 4, 4, 4]
+  discriminator_fft_sizes: [2048, 1024, 512]
+  discriminator_bands:
+    - [0.0, 0.1]
+    - [0.1, 0.25]
+    - [0.25, 0.5]
+    - [0.5, 0.75]
+    - [0.75, 1.0]
+
+optimizer:
+  # Generator optimizer 
+  g_optimizer: "adamw"
+  g_learning_rate: 1.0e-4  
+  g_betas: [0.8, 0.99]  
+  g_eps: 1.0e-8
+  g_weight_decay: 0.0 
+  
+  # Discriminator optimizer 
+  d_optimizer: "adamw"
+  d_learning_rate: 1.0e-4  
+  d_betas: [0.8, 0.99]  
+  d_eps: 1.0e-8
+  d_weight_decay: 0.0  
+  
+  # Scheduler
+  scheduler_type: "exponential"
+  warmup_steps: 0  
+  warmup_start_lr: 1.0e-6
+  min_lr: 1.0e-6
+  gamma: 0.999996  
+  
+  # Gradient clipping 
+  max_grad_norm: 1000.0  
+  max_grad_value: null
+
+augmentations:
+  use_augmentation: true
+  volume_norm:
+    db: [const, -16]
+
+loss:
+  # Mel-spectrogram loss 
+  mel_loss_weight: 100.0 
+  mel_loss_params:
+    sample_rate: 24000
+    win_lengths: [32, 64, 128, 256, 512, 1024, 2048]
+    n_mels: [5, 10, 20, 40, 80, 160, 320]
+    pow: 1.0
+    normalized: false
+    eps: 1.0e-5
+    mag_weight: 0.0
+  
+  # Optional waveform loss
+  waveform_loss_weight: 0.0 
+  
+  # Multi-scale STFT loss (primarily for validation)
+  stft_loss_weight: 0.0 
+  stft_loss_params:
+    window_lengths: [2048, 512]
+    overlap: 0.75
+    eps: 1.0e-7
+    mag_weight: 1.0
+    log_weight: 1.0
+  
+  # Semantic loss (Higgs Audio V2)
+  semantic_loss_weight: 10.0  
+  semantic_loss_type: "mse"
+  
+  # VQ losses
+  commitment_weight: 0.25
+  
+  # GAN losses (adversarial training)
+  use_gan_loss: true
+  adv_gen_loss_weight: 1.0
+  adv_feat_loss_weight: 2.0 
+  
+  # Discriminator update frequency
+  discriminator_update_freq: 1 
+
+dataset:
+  train_manifest: "data/train.jsonl"
+  valid_manifest: "data/valid.jsonl"
+  test_manifest: "data/test.jsonl"
+  
+  segment_length: 9120  # 0.38 seconds at 24khz (HiggsAudiov2/DAC-style configuration) - for training
+  hop_length: null
+
+  # Duration settings (HiggsAudiov2/DAC-style timing)
+  train_duration: 0.38  # seconds
+  valid_duration: 5.0   # seconds  
+  test_duration: 10.0   # seconds
+  audio_backend: "torchaudio"
+  
+  # Data loading 
+  num_workers: 32
+  pin_memory: true
+  persistent_workers: true
+  prefetch_factor: 4
+  
+  # Cropping for validation
+  valid_cropping: "start"
+  test_cropping: "start"
+
+run:
+  # Basic settings
+  seed: 42
+  output_dir: "outputs/"
+  experiment_name: "higgs_audio_v2_24khz"
+  job_id: null
+  
+  # Training settings
+  max_iterations: 400000
+  batch_size_train: 72  
+  batch_size_eval: 100  
+  accum_grad_iters: 1  
+  
+  # Validation
+  validation_interval: 1000
+  num_valid_batches: 1 
+  num_valid_samples: null
+  save_audio_samples: true
+  num_audio_samples: 8
+  sample_freq: 10000  
+  val_idx: [0, 1, 2, 3, 4, 5, 6, 7]  
+  
+  # Checkpointing
+  checkpoint_interval: 5000
+  checkpoint_keep_last: 10
+  save_iters: [10000, 50000, 100000, 200000, 400000]
+  checkpoint_best_metric: "valid/loss/total"
+  checkpoint_best_mode: "min"
+  resume_from: null
+  
+  # Logging
+  log_interval: 50
+  wandb_enabled: true
+  wandb_project: "higgs-audio-v2-tokenizer"
+  wandb_entity: null
+  tensorboard_enabled: true
+  
+  # Hardware
+  device: "cuda"
+  amp: false
+  compile_model: false  
+  cudnn_benchmark: true
+  cudnn_deterministic: false
+  
+  # Distributed training
+  use_distributed: true 
+  dist_backend: "nccl"
+  dist_url: "env://"
+  world_size: 2  
+  rank: 0      
+  gpu: null      
+  local_rank: 0  
+  
+  # Cloud storage (optional)
+  use_cloud_storage: false
+  cloud_provider: "gcs"
+  cloud_bucket: "your-bucket-name"
+  cloud_prefix: "higgs-audio/experiments"
+  
+  # Debugging
+  detect_anomaly: false
+  profile: false
+  profile_steps: 10
+  
+  # Early stopping
+  early_stop_patience: 30
+  early_stop_min_delta: 1.0e-4
+
